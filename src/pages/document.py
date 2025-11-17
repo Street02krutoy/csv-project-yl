@@ -17,7 +17,7 @@ class TableModel(QtCore.QAbstractTableModel):
         return len(self._data)
 
     def columnCount(self, index):
-        return len(self._data[0])
+        return len(self._headers)
 
     def headerData(self, section, orientation, role):
         if role == QtCore.Qt.ItemDataRole.DisplayRole:
@@ -52,21 +52,30 @@ class DocumentScreenWidget(QtWidgets.QWidget):
         super().__init__()
         self.router = router
         self.hasUnsavedChanges = False
-
+        self.id = args[0]
         self.name = args[1]
-        self.filename = args[0]
+        self.filename = f"data/{args[0]}.csv"
 
         self.router.get_main_window().setWindowTitle(args[1])
         self.router.get_main_window().setMinimumSize(600, 400)
         self.init_menu()
+        self.add_row_btn = QtWidgets.QPushButton("Add Row")
+        self.add_col_btn = QtWidgets.QPushButton("Add Column")
+        self.add_row_btn.clicked.connect(self.add_row)
+        self.add_col_btn.clicked.connect(self.add_column)
 
-        self.file_contents = self.router.get_files_table().get_content(args[0])
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addWidget(self.add_row_btn)
+        button_layout.addWidget(self.add_col_btn)
+
+        self.file_contents = self.router.get_files_table().get_content(self.filename)
 
         self.model = TableModel(self.file_contents[1], self.file_contents[0])
         self.table = QtWidgets.QTableView()
         self.table.setModel(self.model)
 
         layout = QtWidgets.QVBoxLayout(self)
+        layout.addLayout(button_layout)
         layout.addWidget(self.table)
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
@@ -86,6 +95,7 @@ class DocumentScreenWidget(QtWidgets.QWidget):
 
         save_action.triggered.connect(self.save)
         close_action.triggered.connect(self.close)
+        edit_headers_action.triggered.connect(self.edit_headers)
 
         save_action.setShortcut(QtGui.QKeySequence.StandardKey.Save)
         close_action.setShortcut(QtGui.QKeySequence.StandardKey.Close)
@@ -102,9 +112,56 @@ class DocumentScreenWidget(QtWidgets.QWidget):
                     index, QtCore.Qt.ItemDataRole.DisplayRole))
             body.append(row_data)
         data = (headers, body)
-        res = self.router.get_files_table().save(data, self.filename)
+        res = self.router.get_files_table().save(data, self.id)
         if (res):
             self.hasUnsavedChanges = False
+
+    def add_row(self):
+        new_row = [""] * self.model.columnCount(None)
+        self.model.beginInsertRows(QtCore.QModelIndex(
+        ), self.model.rowCount(None), self.model.rowCount(None))
+        self.model._data.append(new_row)
+        self.model.endInsertRows()
+        self.hasUnsavedChanges = True
+
+    def add_column(self):
+        self.model.beginInsertColumns(QtCore.QModelIndex(
+        ), self.model.columnCount(None), self.model.columnCount(None))
+        self.model._headers.append(f"Column {self.model.columnCount(None)+1}")
+        for row in self.model._data:
+            row.append("")
+        self.model.endInsertColumns()
+        self.hasUnsavedChanges = True
+
+    def edit_headers(self):
+
+        headers = self.model._headers.copy()
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Edit headers")
+        layout = QtWidgets.QFormLayout(dialog)
+
+        edits = []
+        for i, header in enumerate(headers):
+            line_edit = QtWidgets.QLineEdit(header)
+            layout.addRow(f"Column {i+1}:", line_edit)
+            edits.append(line_edit)
+
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        layout.addWidget(button_box)
+
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            for i, line_edit in enumerate(edits):
+                new_value = line_edit.text()
+                self.model.setHeaderData(
+                    i, QtCore.Qt.Orientation.Horizontal, new_value)
+            self.hasUnsavedChanges = True
 
     def close(self):
         if self.hasUnsavedChanges:

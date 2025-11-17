@@ -25,7 +25,7 @@ class MainScreenWidget(QtWidgets.QWidget):
 
         self.button = QtWidgets.QPushButton()
         self.button.clicked.connect(lambda: self.router.route_to(
-            "/document", self.items[self.list_view.currentIndex().row()][0], self.items[self.list_view.currentIndex().row()][1]))
+            "/document", *self.items[self.list_view.currentIndex().row()]))
         self.button.setText("Перейти к таблице")
 
         layout.addWidget(self.list_view)
@@ -43,10 +43,24 @@ class MainScreenWidget(QtWidgets.QWidget):
         file_menu.addAction(new_action)
 
         # open_action.triggered.connect(self.save)
-        # new_action.triggered.connect(self.close)
+        new_action.triggered.connect(self.create_file)
 
         open_action.setShortcut(QtGui.QKeySequence.StandardKey.Open)
         new_action.setShortcut(QtGui.QKeySequence.StandardKey.New)
+
+    def create_file(self):
+        file, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Enter the filename",
+            "Filename:"
+        )
+        self.router.get_files_table().insert(file)
+        self.items = self.router.get_files_table().get_items()
+        print(self.items)
+        self.model = QtGui.QStandardItemModel()
+        for item in self.items:
+            self.model.appendRow(QtGui.QStandardItem(str(item[1])))
+        self.list_view.setModel(self.model)
 
     def on_item_changed(self, item: QtGui.QStandardItem):
         row = item.row()
